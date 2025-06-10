@@ -3,7 +3,7 @@
 :- dynamic encuesta/8.
 
 % Hechos iniciales - productos
-producto(1, 'Celular SL').
+producto(1, 'Celular TCL').
 producto(2, 'Macbook').
 producto(3, 'Auriculares JBL').
 producto(4, 'Smart TV LG').
@@ -88,9 +88,69 @@ encuesta(49, 5, 1, 1, 3, 2, 0, 230).
 encuesta(50, 5, 3, 2, 1, 0, 5, 150).
 
 % Predicado para crear una nueva encuesta.
-crear_encuesta(Nombre, Ingredientes, Precio) :-
-    % Se agrega a la base de datos el producto con los datos ingresados
-    assert(producto(Nombre, Ingredientes, Precio)),
-    % Se crea a su vez el producto en el stock, con catidad = 0
-    assert(stock(Nombre, 0)),
-    writeln('Nuevo producto creado exitosamente.').
+agregar_encuesta(ProductoID, RangoEdadID, GeneroID, Valoracion, RazonAceptacionID, RazonRechazoID, PrecioDispuesto) :-
+    assertz(encuesta(_, ProductoID, RangoEdadID, GeneroID, Valoracion, RazonAceptacionID, RazonRechazoID, PrecioDispuesto)).
+
+% Reglas para guardar la base de conocimiento
+guardar_base :- tell('encuestas_backup.pl'), listing, told.
+
+
+%********CONSULTAS**************
+% 1. Producto con más aceptación (mayor promedio de valoración)
+producto_mas_aceptado(ID, Nombre, Promedio) :-
+    findall(ProdID, producto(ProdID, _), ListaProd),
+    findall(Prom-ProdID, (
+        member(ProdID, ListaProd),
+        findall(V, encuesta(_, ProdID, _, _, V, _, _, _), Valoraciones),
+        Valoraciones \= [],
+        sum_list(Valoraciones, Suma),
+        length(Valoraciones, Cant),
+        Prom is Suma / Cant
+    ), Promedios),
+    max_member(Prom-IDMax, Promedios),
+    producto(IDMax, Nombre),
+    ID = IDMax,
+    Promedio = Prom.
+
+
+% 2. Producto con menos aceptación
+producto_menos_aceptado(ID, Nombre, Promedio) :-
+    findall(ProdID, producto(ProdID, _), ListaProd),
+    findall(Prom-ProdID, (
+        member(ProdID, ListaProd),
+        findall(V, encuesta(_, ProdID, _, _, V, _, _, _), Valoraciones),
+        Valoraciones \= [],
+        sum_list(Valoraciones, Suma),
+        length(Valoraciones, Cant),
+        Prom is Suma / Cant
+    ), Promedios),
+    min_member(Prom-IDMin, Promedios),
+    producto(IDMin, Nombre),
+    ID = IDMin,
+    Promedio = Prom.
+
+
+% 3. Listados varios
+listar_productos :-
+    producto(ID, Nombre),
+    write('ID: '), write(ID), write(' - '), write(Nombre), nl,
+    fail.
+listar_productos.
+
+% 4. Rango de edad y género que más acepta cada producto
+% ...
+
+% 5. Cantidad de encuestados
+total_encuestados(Total) :-
+    findall(ID, encuesta(ID, _, _, _, _, _, _, _), Lista,
+    length(Lista, Total).
+
+% 6. Cantidad de encuestas de aceptación (valoración >= 3)
+total_aceptaciones(Total) :-
+    findall(ID, (encuesta(ID, _, _, _, Valoracion, _, _, _), Valoracion >= 3), Lista,
+    length(Lista, Total).
+
+% 7. Cantidad de encuestas de no aceptación (valoración < 3)
+total_rechazos(Total) :-
+    findall(ID, (encuesta(ID, _, _, _, Valoracion, _, _, _), Valoracion < 3), Lista),
+    length(Lista, Total).
