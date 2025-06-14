@@ -94,9 +94,10 @@ agregar_encuesta(ProductoID, RangoEdadID, GeneroID, Valoracion, RazonAceptacionI
 % Reglas para guardar la base de conocimiento
 guardar_base :- tell('encuestas_backup.pl'), listing, told.
 
+cargar_base :- consult('encuestas_backup.pl').
 
 %********CONSULTAS**************
-% 1. Producto con más aceptación (mayor promedio de valoración)
+% Producto con más aceptación (mayor promedio de valoración)
 producto_mas_aceptado(ID, Nombre, Promedio) :-
     findall(ProdID, producto(ProdID, _), ListaProd),
     findall(Prom-ProdID, (
@@ -113,7 +114,7 @@ producto_mas_aceptado(ID, Nombre, Promedio) :-
     Promedio = Prom.
 
 
-% 2. Producto con menos aceptación
+% Producto con menos aceptación
 producto_menos_aceptado(ID, Nombre, Promedio) :-
     findall(ProdID, producto(ProdID, _), ListaProd),
     findall(Prom-ProdID, (
@@ -130,27 +131,103 @@ producto_menos_aceptado(ID, Nombre, Promedio) :-
     Promedio = Prom.
 
 
-% 3. Listados varios
+% Listados varios
 listar_productos :-
     producto(ID, Nombre),
     write('ID: '), write(ID), write(' - '), write(Nombre), nl,
     fail.
 listar_productos.
 
-% 4. Rango de edad y género que más acepta cada producto
-% ...
+% Rango de edad y género que más acepta cada producto
+rango_genero_mayor_aceptacion(ProductoID, RangoEdadID, GeneroID) :-
+    findall((Rango, Genero), 
+        (encuesta(_, ProductoID, Rango, Genero, Valoracion, _, _, _), Valoracion >= 3), 
+        Pares),
+    max_frecuencia_pares(Pares, (RangoEdadID, GeneroID)).
 
-% 5. Cantidad de encuestados
+% Predicado auxiliar para encontrar el par (Rango, Género) más frecuente de una lista
+contar_frecuencias([], _, _, Resultado, Resultado).
+contar_frecuencias([Elem|Resto], Lista, MaxF, ElemActual, Resultado) :-
+    include(=(Elem), Lista, SubLista),
+    length(SubLista, Frecuencia),
+    (Frecuencia > MaxF ->
+        contar_frecuencias(Resto, Lista, Frecuencia, Elem, Resultado)
+    ;
+        contar_frecuencias(Resto, Lista, MaxF, ElemActual, Resultado)
+    ).
+
+contar_frecuencias([], _, _, _, _).
+contar_frecuencias([Elem|Resto], Lista, MaxF, _, Resultado) :-
+    include(=(Elem), Lista, SubLista),
+    length(SubLista, Frecuencia),
+    (Frecuencia > MaxF ->
+        NuevoMaxF = Frecuencia,
+        NuevoElem = Elem
+    ;
+        NuevoMaxF = MaxF,
+        NuevoElem = Resultado
+    ),
+    contar_frecuencias(Resto, Lista, NuevoMaxF, _, Resultado1),
+    Resultado = NuevoElem.
+
+
+% Cantidad de encuestados
 total_encuestados(Total) :-
-    findall(ID, encuesta(ID, _, _, _, _, _, _, _), Lista,
+    findall(ID, encuesta(ID, _, _, _, _, _, _, _), Lista),
     length(Lista, Total).
 
-% 6. Cantidad de encuestas de aceptación (valoración >= 3)
+% Cantidad de encuestas de aceptación (valoración >= 3)
 total_aceptaciones(Total) :-
-    findall(ID, (encuesta(ID, _, _, _, Valoracion, _, _, _), Valoracion >= 3), Lista,
+    findall(ID, (encuesta(ID, _, _, _, Valoracion, _, _, _), Valoracion >= 3), Lista),
     length(Lista, Total).
 
-% 7. Cantidad de encuestas de no aceptación (valoración < 3)
+% Cantidad de encuestas de no aceptación (valoración < 3)
 total_rechazos(Total) :-
     findall(ID, (encuesta(ID, _, _, _, Valoracion, _, _, _), Valoracion < 3), Lista),
     length(Lista, Total).
+
+% Consulta: Razón principal de aceptación (más mencionada) para un producto dado
+razon_principal_aceptacion(ProductoID, RazonID) :-
+    findall(Razon,
+        (encuesta(_, ProductoID, _, _, Valoracion, Razon, _, _), Valoracion >= 3, Razon \= 0),
+        Razones),
+    max_frecuencia(Razones, RazonID).
+
+
+% Consulta: Razón principal de rechazo (más mencionada) para un producto dado
+razon_principal_rechazo(ProductoID, RazonID) :-
+    findall(Razon,
+        (encuesta(_, ProductoID, _, _, Valoracion, _, Razon, _), Valoracion < 3, Razon \= 0),
+        Razones),
+    max_frecuencia(Razones, RazonID).
+
+% Consulta: Precio promedio de los encuestados que aceptan un producto (valoración >= 3)
+precio_promedio_aceptacion(ProductoID, Promedio) :-
+    findall(Precio,
+        (encuesta(_, ProductoID, _, _, Valoracion, _, _, Precio), Valoracion >= 3),
+        Precios),
+    Precios \= [],
+    sum_list(Precios, Suma),
+    length(Precios, Cant),
+    Promedio is Suma / Cant.
+
+%*********HELPER****************
+
+% Encuentra el valor con mayor frecuencia en una lista
+max_frecuencia(Lista, MasFrecuente) :-
+    sort(Lista, Unicos),
+    contar_frecuencias_valor(Unicos, Lista, 0, _, MasFrecuente).
+
+contar_frecuencias_valor([], _, _, _, _).
+contar_frecuencias_valor([Elem|Resto], Lista, MaxF, _, Resultado) :-
+    include(=(Elem), Lista, SubLista),
+    length(SubLista, Frecuencia),
+    (Frecuencia > MaxF ->
+        NuevoMaxF = Frecuencia,
+        NuevoElem = Elem
+    ;
+        NuevoMaxF = MaxF,
+        NuevoElem = Resultado
+    ),
+    contar_frecuencias_valor(Resto, Lista, NuevoMaxF, _, Resultado1),
+    Resultado = NuevoElem.
